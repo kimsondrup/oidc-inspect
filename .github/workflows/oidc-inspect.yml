@@ -1,0 +1,35 @@
+name: oidc-inspect
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  id-token: write   # needed to request the OIDC token
+  contents: read
+
+jobs:
+  claims:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch OIDC token and print decoded claims (never the token itself)
+        run: &decode |
+          set -euo pipefail
+          token=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+                  "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r .value)
+          echo "::add-mask::$token"
+          payload=$(printf '%s' "$token" | cut -d. -f2 | tr '_-' '/+')
+          while [ $(( ${#payload} % 4 )) -ne 0 ]; do payload="$payload="; done
+          echo "----- BEGIN CLAIMS -----"
+          printf '%s' "$payload" | base64 -d | jq -S .
+          echo "----- END CLAIMS -----"
+
+  claims-with-environment:
+    runs-on: ubuntu-latest
+    environment: oidc-test
+    steps:
+      - name: Fetch OIDC token and print decoded claims (environment job)
+        run: *decode
